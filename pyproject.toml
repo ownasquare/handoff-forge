@@ -22,7 +22,7 @@ classifiers = [
   "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 dependencies = [
-  "chromadb==0.6.3",
+  "chromadb==1.5.9",
   "filelock>=3.19,<4",
   "llama-index-core==0.14.23",
   "markdown-it-py>=4,<5",
