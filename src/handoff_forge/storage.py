@@ -49,6 +49,13 @@ _ARTIFACT_DELETE_TARGETS = {
 }
 
 
+def validate_storage_identifier(value: str, *, label: str) -> None:
+    """Apply the canonical storage-safe identifier contract."""
+
+    if not _SAFE_ID.fullmatch(value):
+        raise StorageError(f"invalid {label} identifier")
+
+
 def _redact_json(value: Any) -> Any:
     return sanitize_json_value(value)
 
@@ -352,18 +359,20 @@ class ContentAddressedStore:
         *,
         metadata: Mapping[str, Any] | None = None,
         redact: bool = True,
+        idempotency_key: str | None = None,
     ) -> Path:
         """Persist a collision-resistant generated output and its manifest."""
 
-        project = self.load_project(project_id)
         display_name = normalize_display_name(filename)
         suffix = Path(display_name).suffix.casefold()
         if suffix not in {".md", ".mdc", ".json", ".txt"}:
             raise StorageError("generated output must be Markdown, MDC, JSON, or text")
         stem = re.sub(r"[^A-Za-z0-9._-]+", "-", Path(display_name).stem).strip("-.")
         stem = stem[:80] or "handoff"
-        output_id = f"out_{uuid4().hex}"
-        output_name = f"{stem}-{output_id[-12:]}{suffix}"
+        if idempotency_key is not None and not re.fullmatch(
+            r"[A-Za-z0-9][A-Za-z0-9._:-]{0,191}", idempotency_key
+        ):
+            raise StorageError("invalid output idempotency key")
         if isinstance(content, str):
             rendered = redact_secrets(content) if redact else content
             payload = rendered.encode("utf-8")
@@ -381,10 +390,73 @@ class ContentAddressedStore:
             raise StorageError("generated output exceeds the configured size limit")
 
         with self._lock:
+            project = self.load_project(project_id)
             project_directory = self.project_dir(project_id)
             outputs = ensure_directory(project_directory / "outputs")
-            destination = confined_path(project_directory, outputs / output_name)
-            self._atomic_write_bytes(destination, payload)
+            manifests = ensure_directory(project_directory / "manifests" / "outputs")
+            if idempotency_key is not None:
+                for existing_id in project.output_ids:
+                    existing = self.get_output(project_id, existing_id)
+                    if existing.metadata.get("idempotency_key") == idempotency_key:
+                        return existing.stored_path
+
+                identity = sha256_bytes(f"{project_id}\0{idempotency_key}".encode())
+                output_id = f"out_{identity}"
+                output_name = f"{output_id}{suffix}"
+                destination = confined_path(project_directory, outputs / output_name)
+                manifest_path = confined_path(project_directory, manifests / f"{output_id}.json")
+
+                if manifest_path.exists() or manifest_path.is_symlink():
+                    if manifest_path.is_symlink() or not manifest_path.is_file():
+                        raise StorageError("idempotent output manifest is not a regular file")
+                    existing = self.get_output(project_id, output_id)
+                    if existing.metadata.get("idempotency_key") != idempotency_key:
+                        raise StorageError("output idempotency identity collision")
+                    self._attach_output_reference(project, project_directory, output_id)
+                    return existing.stored_path
+
+                # Compatibility repair for manifests written by the previous random-ID
+                # implementation before the project reference was committed.
+                if manifests.is_dir() and not manifests.is_symlink():
+                    for candidate in sorted(manifests.glob("*.json")):
+                        if candidate.is_symlink() or not candidate.is_file():
+                            continue
+                        legacy_output_id = candidate.stem
+                        if legacy_output_id in project.output_ids:
+                            continue
+                        try:
+                            self._validate_id(legacy_output_id, label="output")
+                            orphan = self.get_output(project_id, legacy_output_id)
+                        except (OSError, StorageError, ValueError):
+                            continue
+                        if orphan.metadata.get("idempotency_key") != idempotency_key:
+                            continue
+                        self._attach_output_reference(project, project_directory, orphan.id)
+                        return self.get_output(project_id, orphan.id).stored_path
+
+                pending_payloads = sorted(outputs.glob(f"{output_id}.*"))
+                if len(pending_payloads) > 1:
+                    raise StorageError("multiple pending payloads share an output identity")
+                if pending_payloads:
+                    destination = confined_path(
+                        project_directory,
+                        pending_payloads[0],
+                        must_exist=True,
+                    )
+                    if destination.is_symlink() or not destination.is_file():
+                        raise StorageError("pending output payload is not a regular file")
+                    payload = destination.read_bytes()
+                    if len(payload) > self.settings.max_markdown_characters * 4:
+                        raise StorageError("pending output exceeds the configured size limit")
+                    enforce_private_file(destination)
+                else:
+                    self._atomic_write_bytes(destination, payload)
+            else:
+                output_id = f"out_{uuid4().hex}"
+                output_name = f"{stem}-{output_id[-12:]}{suffix}"
+                destination = confined_path(project_directory, outputs / output_name)
+                self._atomic_write_bytes(destination, payload)
+
             manifest = {
                 "id": output_id,
                 "project_id": project_id,
@@ -394,15 +466,38 @@ class ContentAddressedStore:
                 "sha256": sha256_bytes(payload),
                 "size_bytes": len(payload),
                 "created_at": utc_now().isoformat(),
-                "metadata": dict(metadata or {}),
+                "metadata": {
+                    **dict(metadata or {}),
+                    **({"idempotency_key": idempotency_key} if idempotency_key is not None else {}),
+                },
             }
-            manifests = ensure_directory(project_directory / "manifests" / "outputs")
             self._atomic_write_json(manifests / f"{output_id}.json", manifest)
             updated = project.model_copy(
                 update={"output_ids": [*project.output_ids, output_id], "updated_at": utc_now()}
             )
             self._write_model(project_directory / "project.json", updated)
         return destination
+
+    def _attach_output_reference(
+        self,
+        project: ProjectRecord,
+        project_directory: Path,
+        output_id: str,
+    ) -> None:
+        """Repair a durable output whose project reference was interrupted."""
+
+        if output_id in project.output_ids:
+            return
+        repaired = project.model_copy(
+            update={
+                "output_ids": [*project.output_ids, output_id],
+                "updated_at": utc_now(),
+            }
+        )
+        self._write_model(project_directory / "project.json", repaired)
+        readback = self.load_project(project.id)
+        if output_id not in readback.output_ids:
+            raise StorageError("output idempotency repair failed readback")
 
     def get_output(self, project_id: str, output_id: str) -> StoredOutput:
         """Return a sanitized output manifest after path and hash readback."""
@@ -411,6 +506,8 @@ class ContentAddressedStore:
         project_directory = self.project_dir(project_id)
         manifest_path = project_directory / "manifests" / "outputs" / f"{output_id}.json"
         output = StoredOutput.model_validate(self._read_json(manifest_path))
+        if output.id != output_id:
+            raise StorageError("output manifest identifier does not match its filename")
         if output.project_id != project_id:
             raise StorageError("output manifest belongs to a different project")
         stored_path = confined_path(project_directory, output.stored_path, must_exist=True)
@@ -448,6 +545,13 @@ class ContentAddressedStore:
     def read_job_checkpoint(self, project_id: str, job_id: str) -> dict[str, Any]:
         self._validate_id(job_id, label="job")
         return self._read_json(self.project_dir(project_id) / "jobs" / f"{job_id}.json")
+
+    def job_checkpoint_exists(self, project_id: str, job_id: str) -> bool:
+        """Return whether a regular checkpoint exists for an exact validated job ID."""
+
+        self._validate_id(job_id, label="job")
+        path = self.project_dir(project_id) / "jobs" / f"{job_id}.json"
+        return path.is_file() and not path.is_symlink()
 
     def delete_project(self, project_id: str) -> None:
         """Remove project state without following symlinks, then prove deletion."""
@@ -639,8 +743,7 @@ class ContentAddressedStore:
 
     @staticmethod
     def _validate_id(value: str, *, label: str) -> None:
-        if not _SAFE_ID.fullmatch(value):
-            raise StorageError(f"invalid {label} identifier")
+        validate_storage_identifier(value, label=label)
 
     @staticmethod
     def _fsync_directory(path: Path) -> None:

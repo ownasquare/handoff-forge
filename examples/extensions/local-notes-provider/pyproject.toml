@@ -7,7 +7,7 @@ name = "handoff-forge-local-notes"
 version = "0.1.0"
 description = "Deterministic local provider example for Handoff Forge"
 requires-python = ">=3.11,<3.14"
-dependencies = ["handoff-forge>=0.3,<0.4"]
+dependencies = ["handoff-forge>=0.4,<0.5"]
 
 [project.entry-points."handoff_forge.providers"]
 local-notes = "handoff_forge_local_notes.provider:create_provider"

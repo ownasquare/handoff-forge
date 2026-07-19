@@ -2,7 +2,7 @@
 
 ## Supported version
 
-Security updates are applied to the current 0.3.x beta line.
+Security updates are applied to the current 0.4.x beta line.
 
 ## Report privately
 

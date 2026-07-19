@@ -98,7 +98,7 @@ testpaths = ["tests"]
 pythonpath = ["."]
 markers = [
   "integration: exercises persistent local storage or Chroma",
-  "live: makes an explicitly opted-in provider call",
+  "live: makes an explicitly opted-in provider or authenticated destination call",
   "ui: exercises Streamlit presentation behavior",
   "e2e: exercises the rendered Streamlit application with Playwright",
 ]

@@ -15,6 +15,7 @@ from handoff_forge.models import JobStatus, ModelRoute, ProviderCapabilities
 from handoff_forge.providers.base import ProviderStatus
 from handoff_forge.providers.registry import ProviderRegistry
 from handoff_forge.ui.app import (
+    _MODEL_DEFAULTS,
     VIEWS,
     _file_addition_message,
     _output_label,
@@ -26,6 +27,11 @@ from handoff_forge.ui.state import project_state_key
 
 ROOT = Path(__file__).parents[2]
 APP = ROOT / "src" / "handoff_forge" / "ui" / "app.py"
+
+
+def test_remote_model_defaults_use_current_supported_ids() -> None:
+    assert _MODEL_DEFAULTS["anthropic"] == "claude-sonnet-4-6"
+    assert _MODEL_DEFAULTS["xai"] == "grok-4.5"
 
 
 def _app_test(monkeypatch, tmp_path: Path) -> AppTest:

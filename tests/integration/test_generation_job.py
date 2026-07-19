@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from handoff_forge.errors import HandoffValidationError
+from handoff_forge.errors import HandoffValidationError, StorageError
 from handoff_forge.handoffs.composer import OfflineHandoffComposer
 from handoff_forge.handoffs.jobs import GenerationJobRunner, InMemoryCheckpointStore
 from handoff_forge.handoffs.profiles import render_handoff
@@ -93,6 +93,19 @@ def _block(
         extraction_method="fixture",
         metadata=metadata or {},
     )
+
+
+def test_create_job_rejects_unsafe_caller_supplied_identifier() -> None:
+    runner = _runner(RecordingGenerator())
+    routes = {section_id: ModelRoute() for section_id in range(1, 13)}
+
+    with pytest.raises(StorageError, match="job identifier"):
+        runner.create_job(
+            mode=HandoffMode.PRE_COMPACT,
+            profile=TemplateProfile.CODEX_PRECOMPACT_V1,
+            route_matrix=routes,
+            job_id="../unsafe-job",
+        )
 
 
 def test_resume_keeps_successful_sections_and_sanitizes_errors() -> None:

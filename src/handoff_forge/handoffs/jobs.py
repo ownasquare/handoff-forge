@@ -32,6 +32,7 @@ from handoff_forge.models import (
     TemplateProfile,
     utc_now,
 )
+from handoff_forge.storage import validate_storage_identifier
 
 MAX_SECTION_EVIDENCE_BLOCKS = 64
 
@@ -94,11 +95,14 @@ class GenerationJobRunner:
         profile: TemplateProfile,
         route_matrix: Mapping[int, ModelRoute],
         inventory: Sequence[InventoryItem] = (),
+        job_id: str | None = None,
     ) -> GenerationJob:
         if set(route_matrix) != set(range(1, 13)):
             raise ValueError("route matrix must contain Sections 1 through 12")
+        selected_job_id = job_id or f"job-{uuid4().hex}"
+        validate_storage_identifier(selected_job_id, label="job")
         job = GenerationJob(
-            id=f"job-{uuid4().hex}",
+            id=selected_job_id,
             project_id=self.composer.project_id,
             mode=mode,
             profile=profile,

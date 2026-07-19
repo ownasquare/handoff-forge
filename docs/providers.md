@@ -37,14 +37,14 @@ to the upload for that generation. Enabling the first gate never grants the seco
 Install all official adapters from a source checkout:
 
 ```console
-python -m pip install -e '.[providers]'
-handoff-forge --allow-network doctor
+uv sync --no-dev --frozen --extra providers
+uv run --no-dev --frozen --extra providers handoff-forge --allow-network doctor
 ```
 
 Or install them with a locally built wheel:
 
 ```console
-python -m pip install 'handoff-forge[providers] @ file:///ABSOLUTE/PATH/handoff_forge-0.3.0-py3-none-any.whl'
+python -m pip install 'handoff-forge[providers] @ file:///ABSOLUTE/PATH/handoff_forge-0.4.0-py3-none-any.whl'
 handoff-forge --allow-network doctor
 ```
 
@@ -57,20 +57,63 @@ Set only the credential name for the provider you plan to use:
 | Google | `GEMINI_API_KEY` or `GOOGLE_API_KEY` |
 | xAI | `XAI_API_KEY` |
 
+### Workbench starting models
+
+The workbench offers these starting identifiers, checked against the providers' official catalogs
+on 2026-07-19. They are editable conveniences, not proof that an account is entitled to use them:
+
+| Provider | Starting model | Official reference |
+|---|---|---|
+| OpenAI | `gpt-4.1-mini` | [GPT-4.1 mini](https://developers.openai.com/api/docs/models/gpt-4.1-mini) |
+| Anthropic | `claude-sonnet-4-6` | [Claude model lifecycle](https://platform.claude.com/docs/en/about-claude/model-deprecations) |
+| Google | `gemini-2.5-flash` | [Gemini 2.5 Flash](https://ai.google.dev/gemini-api/docs/models/gemini-2.5-flash) |
+| xAI | `grok-4.5` | [xAI models](https://docs.x.ai/developers/models) |
+
+Provider availability changes independently of Handoff Forge. Confirm the exact identifier against
+the selected account before a real run, and keep visual-file inclusion off until that exact model's
+image-input support is separately verified.
+
 Then opt in for one CLI generation. Replace the uppercase values with a project name, provider,
-and exact model identifier that your account can use:
+and exact model identifier that your account can use. These commands continue the source-checkout
+path above; when using an installed wheel, run the equivalent `handoff-forge` command from that
+wheel's isolated environment:
 
 ```console
-handoff-forge --allow-network generate \
+uv run --no-dev --frozen --extra providers handoff-forge --allow-network generate \
   --project PROJECT \
   --provider PROVIDER \
   --model MODEL_ID \
   --allow-cloud-upload
 ```
 
-In the workbench, start it with `handoff-forge --allow-network ui`, choose the provider, then turn
-on cloud-upload consent for the current handoff. That consent applies to the requested generation;
-it does not replace the network gate. Visual-file upload remains a separate opt-in.
+In the workbench, start it with
+`uv run --no-dev --frozen --extra providers handoff-forge --allow-network ui`, choose the provider,
+then turn on cloud-upload consent for the current handoff. That consent applies to the requested
+generation; it does not replace the network gate. Visual-file upload remains a separate opt-in.
+
+### One-call live canary
+
+The opt-in live test validates one provider/model without uploading project files. It requires all
+of the following before it can reach an SDK call:
+
+- `HANDOFF_FORGE_OFFLINE=false` and `HANDOFF_FORGE_ALLOW_NETWORK=true`
+- `HANDOFF_FORGE_LIVE_ALLOW_CLOUD_UPLOAD=true`
+- `HANDOFF_FORGE_LIVE_PROVIDER` and `HANDOFF_FORGE_LIVE_MODEL`
+- the matching credential variable from the table above
+- the selected provider SDK from the `providers` extra
+
+After setting only the selected provider's credential, run:
+
+```console
+uv run --frozen pytest -s -m live tests/live/test_provider_smoke.py
+```
+
+The test makes exactly one text-only attempt, sends a fixed JSON canary rather than project
+evidence, caps output at 64 tokens, uses a 45-second provider timeout with no retries, and requires
+completion within 60 seconds. Its one-line JSON proof contains only the proof schema, provider,
+model, canary, elapsed milliseconds, fixed limits, and pass/text-only flags. Prompts, credentials,
+request IDs, response prose, and local paths are never included. Missing opt-ins, SDKs, or matching
+credentials produce a skip before network execution. Live tests remain outside normal CI.
 
 ### Docker
 

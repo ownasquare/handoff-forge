@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 import json
+import os
+import shutil
+import sys
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict, is_dataclass
 from enum import Enum
 from pathlib import Path
 from typing import Annotated, Any, TypeVar
+from uuid import uuid4
 
 import typer
 from pydantic import BaseModel
@@ -21,6 +25,13 @@ from handoff_forge.application import (
 )
 from handoff_forge.config import HandoffSettings
 from handoff_forge.errors import CapabilityError, HandoffForgeError
+from handoff_forge.harnesses.lifecycle import (
+    ADAPTER_ID,
+    CodexHookConfigManager,
+    CodexLifecycleAdapter,
+    LifecycleBinding,
+    LifecycleStateStore,
+)
 from handoff_forge.models import HandoffMode, JobStatus, ModelRoute, TemplateProfile
 from handoff_forge.security import redact_secrets
 
@@ -32,8 +43,12 @@ app = typer.Typer(
 )
 project_app = typer.Typer(help="Create, list, and delete local projects.")
 extensions_app = typer.Typer(help="Inspect trusted provider and harness extensions.")
+lifecycle_app = typer.Typer(help="Manage explicit AI harness lifecycle integrations.")
+codex_lifecycle_app = typer.Typer(help="Configure and inspect the Codex pre-compaction adapter.")
 app.add_typer(project_app, name="project")
 app.add_typer(extensions_app, name="extensions")
+app.add_typer(lifecycle_app, name="lifecycle")
+lifecycle_app.add_typer(codex_lifecycle_app, name="codex")
 
 
 class _CLIState:
@@ -531,13 +546,282 @@ def ui_command(
     )
 
 
+@lifecycle_app.command("run")
+def lifecycle_run(
+    context: typer.Context,
+    project: Annotated[str, typer.Option("--project", "-p")],
+    event: Annotated[
+        HandoffMode,
+        typer.Option(
+            "--event",
+            help="Lifecycle event to preserve. Use post-task when a task is truly complete.",
+        ),
+    ] = HandoffMode.POST_TASK,
+    workspace: Annotated[Path | None, typer.Option("--workspace")] = None,
+    event_key: Annotated[
+        str | None,
+        typer.Option(
+            "--event-key",
+            help="Stable retry key. Reusing it deduplicates repeated delivery.",
+        ),
+    ] = None,
+    json_output: Annotated[bool, typer.Option("--json", help="Emit JSON.")] = False,
+) -> None:
+    """Explicitly create a deduplicated pre-compact or post-task handoff."""
+
+    selected_key = event_key or uuid4().hex
+
+    def operation(service: HandoffApplication) -> dict[str, object]:
+        resolved_project = service.resolve_project(project)
+        selected_workspace = workspace or Path.cwd()
+        store = LifecycleStateStore(service.settings.data_root)
+        binding = store.create_binding(
+            project_id=resolved_project.id,
+            workspace=selected_workspace,
+            enable_existing=False,
+        )
+        adapter = CodexLifecycleAdapter(
+            state_store=store,
+            generator=lambda selected, selected_event, lifecycle_event_id: (
+                service.generate_lifecycle_handoff(
+                    selected.project_id,
+                    event=selected_event,
+                    lifecycle_event_id=lifecycle_event_id,
+                )
+            ),
+        )
+        result = adapter.run_explicit(
+            event=event,
+            binding_id=binding.id,
+            cwd=selected_workspace,
+            event_key=selected_key,
+        )
+        return {
+            "binding_id": binding.id,
+            "event": event.value,
+            "event_key": selected_key,
+            **result,
+        }
+
+    _perform_lifecycle(
+        json_output,
+        lambda: operation(_service(context)),
+        lambda result: (
+            f"{result.get('systemMessage', 'Lifecycle event was not generated')} "
+            f"Retry key: {result['event_key']}"
+        ),
+    )
+
+
+@codex_lifecycle_app.command("install")
+def lifecycle_codex_install(
+    context: typer.Context,
+    project: Annotated[str, typer.Option("--project", "-p")],
+    workspace: Annotated[Path | None, typer.Option("--workspace")] = None,
+    hooks_file: Annotated[
+        Path | None,
+        typer.Option(
+            "--hooks-file",
+            help="Codex hooks.json target. Defaults to the current user's Codex home.",
+        ),
+    ] = None,
+    codex_executable: Annotated[str, typer.Option("--codex-executable")] = "codex",
+    json_output: Annotated[bool, typer.Option("--json", help="Emit JSON.")] = False,
+) -> None:
+    """Configure one PreCompact binding after verifying the effective hooks feature."""
+
+    def operation(service: HandoffApplication) -> LifecycleBinding:
+        resolved_project = service.resolve_project(project)
+        state = _root_state(context)
+        manager = CodexHookConfigManager(
+            hooks_path=_codex_hooks_path(hooks_file),
+            state_store=LifecycleStateStore(state.settings.data_root),
+        )
+        return manager.install(
+            project_id=resolved_project.id,
+            workspace=workspace or Path.cwd(),
+            executable=_current_cli_executable(),
+            codex_executable=codex_executable,
+        )
+
+    _perform_lifecycle(
+        json_output,
+        lambda: operation(_service(context)),
+        lambda binding: (
+            f"Configured Codex PreCompact binding {binding.id} for {binding.workspace}. "
+            "Open Codex in this workspace and use /hooks to review and trust the exact "
+            "definition before relying on delivery. Runtime activation remains unverified."
+        ),
+    )
+
+
+@codex_lifecycle_app.command("verify")
+def lifecycle_codex_verify(
+    context: typer.Context,
+    binding: Annotated[str, typer.Argument(help="Lifecycle binding identifier.")],
+    hooks_file: Annotated[Path | None, typer.Option("--hooks-file")] = None,
+    codex_executable: Annotated[str, typer.Option("--codex-executable")] = "codex",
+    json_output: Annotated[bool, typer.Option("--json", help="Emit JSON.")] = False,
+) -> None:
+    state = _root_state(context)
+    manager = CodexHookConfigManager(
+        hooks_path=_codex_hooks_path(hooks_file),
+        state_store=LifecycleStateStore(state.settings.data_root),
+    )
+    _perform_lifecycle(
+        json_output,
+        lambda: manager.verify(binding, codex_executable=codex_executable),
+        lambda report: (
+            f"Binding {report.binding_id}: configured={report.configured}, "
+            f"binding_enabled={report.binding_enabled}, "
+            f"feature_enabled={report.feature_enabled}, trust={report.trust_status}, "
+            f"runtime_activation={report.runtime_activation}. Use Codex /hooks to review "
+            "and trust the exact definition before relying on delivery."
+        ),
+    )
+
+
+@codex_lifecycle_app.command("disable")
+def lifecycle_codex_disable(
+    context: typer.Context,
+    binding: Annotated[str, typer.Argument(help="Lifecycle binding identifier.")],
+    json_output: Annotated[bool, typer.Option("--json", help="Emit JSON.")] = False,
+) -> None:
+    state = _root_state(context)
+    store = LifecycleStateStore(state.settings.data_root)
+    _perform_lifecycle(
+        json_output,
+        lambda: store.set_binding_enabled(binding, False),
+        lambda result: f"Disabled Codex lifecycle binding {result.id}.",
+    )
+
+
+@codex_lifecycle_app.command("uninstall")
+def lifecycle_codex_uninstall(
+    context: typer.Context,
+    binding: Annotated[str, typer.Argument(help="Lifecycle binding identifier.")],
+    hooks_file: Annotated[Path | None, typer.Option("--hooks-file")] = None,
+    json_output: Annotated[bool, typer.Option("--json", help="Emit JSON.")] = False,
+) -> None:
+    state = _root_state(context)
+    manager = CodexHookConfigManager(
+        hooks_path=_codex_hooks_path(hooks_file),
+        state_store=LifecycleStateStore(state.settings.data_root),
+    )
+
+    def operation() -> dict[str, object]:
+        manager.uninstall(binding)
+        return {"binding_id": binding, "uninstalled": True}
+
+    _perform_lifecycle(
+        json_output,
+        operation,
+        lambda result: f"Uninstalled Codex lifecycle binding {result['binding_id']}.",
+    )
+
+
+@codex_lifecycle_app.command("handle", hidden=True)
+def lifecycle_codex_handle(
+    context: typer.Context,
+    binding: Annotated[str, typer.Option("--binding")],
+    adapter_id: Annotated[str, typer.Option("--adapter-id")],
+) -> None:
+    """Receive one Codex hook JSON object on stdin without exposing its contents."""
+
+    if adapter_id != ADAPTER_ID:
+        typer.echo(json.dumps({"continue": True}))
+        return
+    raw = sys.stdin.read(128_001)
+    if len(raw) > 128_000:
+        typer.echo(
+            json.dumps(
+                {
+                    "continue": True,
+                    "systemMessage": (
+                        "Handoff Forge rejected an oversized lifecycle event. "
+                        "Use the manual Create handoff workflow."
+                    ),
+                }
+            )
+        )
+        return
+    try:
+        payload = json.loads(raw or "{}")
+        if not isinstance(payload, dict):
+            raise ValueError("hook input must be an object")
+        service = _service(context)
+        store = LifecycleStateStore(service.settings.data_root)
+        adapter = CodexLifecycleAdapter(
+            state_store=store,
+            generator=lambda selected, event, event_id: service.generate_lifecycle_handoff(
+                selected.project_id,
+                event=event,
+                lifecycle_event_id=event_id,
+            ),
+        )
+        result = adapter.handle(payload, binding)
+    except Exception:
+        result = {
+            "continue": True,
+            "systemMessage": (
+                "Handoff Forge could not process this lifecycle event. "
+                "Use the manual Create handoff workflow."
+            ),
+        }
+    typer.echo(json.dumps(result, ensure_ascii=False))
+
+
 T = TypeVar("T")
 
 
-def _service(context: typer.Context) -> HandoffApplication:
+def _root_state(context: typer.Context) -> _CLIState:
     state = context.find_root().obj
     if not isinstance(state, _CLIState):
         raise RuntimeError("CLI application state was not initialized")
+    return state
+
+
+def _codex_hooks_path(value: Path | None) -> Path:
+    if value is not None:
+        return value
+    configured_home = os.environ.get("CODEX_HOME")
+    codex_home = Path(configured_home).expanduser() if configured_home else Path.home() / ".codex"
+    return codex_home / "hooks.json"
+
+
+def _current_cli_executable() -> Path:
+    resolved = shutil.which("handoff-forge")
+    if resolved:
+        return Path(resolved).resolve()
+    return Path(sys.argv[0]).expanduser().resolve()
+
+
+def _perform_lifecycle(
+    json_output: bool,
+    operation: Callable[[], T],
+    human: Callable[[T], str],
+) -> None:
+    try:
+        result = operation()
+    except (HandoffForgeError, OSError, UnicodeError, ValueError) as error:
+        message = (
+            redact_secrets(str(error))[:1_000]
+            if isinstance(error, CapabilityError)
+            else f"{type(error).__name__}: lifecycle command failed safely"
+        )
+        if json_output:
+            typer.echo(json.dumps({"error": message}, ensure_ascii=False), err=True)
+        else:
+            typer.echo(f"Error: {message}", err=True)
+        raise typer.Exit(code=2) from None
+    if json_output:
+        typer.echo(json.dumps(_jsonable(result), ensure_ascii=False, indent=2, sort_keys=True))
+    else:
+        typer.echo(human(result))
+
+
+def _service(context: typer.Context) -> HandoffApplication:
+    state = _root_state(context)
     if state.service is None:
         state.service = build_application(
             state.settings,

@@ -14,7 +14,9 @@ cd handoff-forge
 docker compose up --build
 ```
 
-Open `http://127.0.0.1:8517`. Press `Ctrl+C` to stop the app. `docker compose down` removes the container but preserves your named data volume.
+Open `http://127.0.0.1:8517`. Press `Ctrl+C` to stop the app. `docker compose down` removes the
+container but preserves your named data volume. To irreversibly remove that volume and all Handoff
+Forge data stored in it, run `docker compose down --volumes`.
 
 Docker does not automatically see Codex, Claude, Gemini, or Grok installed on the host. You can
 still complete the sample and download every checked handoff. Use the source install if you want

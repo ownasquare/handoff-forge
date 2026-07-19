@@ -18,6 +18,12 @@ Use the project rebuild command after an embedding, parser, or node-serializer u
 collection fingerprint prevents incompatible vectors from mixing. Keep the canonical project data
 until the rebuilt collection passes count and retrieval readback.
 
+Chroma `0.6.3` is intentionally pinned. Do not replace it with Chroma 1.x against an existing data
+root or treat a downgrade as a safe rollback. Migration testing found that an older runtime can
+write to a 1.x-touched index and leave the next 1.x open unreadable. A future upgrade must use a new
+versioned derived-index directory, preserve the complete pre-upgrade data root, rebuild from
+canonical project data, and pass restart/readback before the old index is retired.
+
 ## Deletion
 
 Delete only an explicit generated project ID. Handoff Forge rejects broad roots and unresolved

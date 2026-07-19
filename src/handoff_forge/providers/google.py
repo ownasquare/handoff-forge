@@ -37,8 +37,12 @@ class GoogleProvider(RemoteProviderBase):
     def _build_client(self) -> object:
         module = self._import_module()
         client_type = module.Client
+        http_options = module.types.HttpOptions(
+            api_version="v1",
+            timeout=self.timeout_seconds * 1_000,
+        )
         # Select the stable API surface rather than the SDK's default beta endpoint.
-        return client_type(http_options={"api_version": "v1"})
+        return client_type(http_options=http_options)
 
     def generate(self, request: GenerationRequest) -> GenerationResult:
         self._guard(request)

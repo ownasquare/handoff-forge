@@ -97,6 +97,9 @@ Handoff Forge displays only harness profiles whose executable is currently insta
 preview-first, use a structured argument vector with `shell=False`, and reject resume flags or paths
 outside managed storage.
 
+Harness extensions only prepare commands for a new destination session. Automatic lifecycle hooks
+are currently built in for Codex only and are not an extension point.
+
 ## Failure behavior
 
 - An empty allowlist may inspect supported entry-point metadata for the CLI and Settings list, but

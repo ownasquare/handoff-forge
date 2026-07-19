@@ -8,9 +8,11 @@ ROOT = Path(__file__).parents[2]
 def test_provider_recipes_keep_network_and_upload_consent_as_separate_gates() -> None:
     guide = (ROOT / "docs" / "providers.md").read_text(encoding="utf-8")
 
-    assert "python -m pip install -e '.[providers]'" in guide
+    assert "uv sync --no-dev --frozen --extra providers" in guide
     assert "handoff-forge[providers] @ file:///ABSOLUTE/PATH/" in guide
-    assert "handoff-forge --allow-network doctor" in guide
+    assert (
+        "uv run --no-dev --frozen --extra providers handoff-forge --allow-network doctor" in guide
+    )
     assert "--allow-cloud-upload" in guide
     assert "HANDOFF_FORGE_OFFLINE=false" in guide
     assert "HANDOFF_FORGE_ALLOW_NETWORK=true" in guide

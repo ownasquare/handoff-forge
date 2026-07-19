@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -10,6 +11,10 @@ from typer.testing import CliRunner
 from handoff_forge.application import HandoffApplication
 from handoff_forge.cli import app
 from handoff_forge.extensions import ExtensionInfo
+from handoff_forge.harnesses.lifecycle import (
+    CodexPreCompactCapability,
+    LifecycleArtifact,
+)
 from handoff_forge.models import JobStatus, ModelRoute
 
 runner = CliRunner()
@@ -23,6 +28,7 @@ def test_cli_help_exposes_complete_offline_workflow() -> None:
     for command in (
         "doctor",
         "extensions",
+        "lifecycle",
         "project",
         "ingest",
         "inspect",
@@ -41,6 +47,251 @@ def test_cli_help_exposes_complete_offline_workflow() -> None:
         "ui",
     ):
         assert command in result.stdout
+
+
+def test_lifecycle_cli_exposes_safe_codex_management_commands() -> None:
+    lifecycle_result = runner.invoke(app, ["lifecycle", "--help"])
+    result = runner.invoke(app, ["lifecycle", "codex", "--help"])
+
+    assert lifecycle_result.exit_code == 0, lifecycle_result.stdout
+    assert "run" in lifecycle_result.stdout
+    assert result.exit_code == 0, result.stdout
+    for command in ("install", "verify", "disable", "uninstall"):
+        assert command in result.stdout
+
+
+def test_lifecycle_cli_manages_a_temporary_hook_file_without_losing_other_hooks(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        "handoff_forge.harnesses.lifecycle.probe_codex_precompact",
+        lambda _executable, *, cwd=None: CodexPreCompactCapability(
+            feature_enabled=True,
+            version="fixture",
+            feature_evidence="features-list",
+        ),
+    )
+    root = tmp_path / "data"
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    hooks_file = tmp_path / "codex-home" / "hooks.json"
+    hooks_file.parent.mkdir()
+    hooks_file.write_text(
+        json.dumps(
+            {
+                "description": "keep this valid metadata",
+                "hooks": {
+                    "Stop": [{"hooks": [{"type": "command", "command": "/usr/bin/keep-stop"}]}]
+                },
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    created = runner.invoke(
+        app,
+        ["--data-root", str(root), "project", "create", "Lifecycle CLI", "--json"],
+    )
+    project_id = json.loads(created.stdout)["id"]
+
+    installed = runner.invoke(
+        app,
+        [
+            "--data-root",
+            str(root),
+            "lifecycle",
+            "codex",
+            "install",
+            "--project",
+            project_id,
+            "--workspace",
+            str(workspace),
+            "--hooks-file",
+            str(hooks_file),
+            "--json",
+        ],
+    )
+    assert installed.exit_code == 0, installed.stdout
+    binding_id = json.loads(installed.stdout)["id"]
+
+    human_install = runner.invoke(
+        app,
+        [
+            "--data-root",
+            str(root),
+            "lifecycle",
+            "codex",
+            "install",
+            "--project",
+            project_id,
+            "--workspace",
+            str(workspace),
+            "--hooks-file",
+            str(hooks_file),
+        ],
+    )
+    assert human_install.exit_code == 0, human_install.stdout
+    assert "Configured Codex PreCompact binding" in human_install.stdout
+    assert "/hooks" in human_install.stdout
+    assert "review and trust" in human_install.stdout
+    assert "before relying on delivery" in human_install.stdout
+
+    verified = runner.invoke(
+        app,
+        [
+            "--data-root",
+            str(root),
+            "lifecycle",
+            "codex",
+            "verify",
+            binding_id,
+            "--hooks-file",
+            str(hooks_file),
+            "--json",
+        ],
+    )
+    assert verified.exit_code == 0, verified.stdout
+    verified_payload = json.loads(verified.stdout)
+    assert verified_payload["configured"] is True
+    assert verified_payload["binding_enabled"] is True
+    assert verified_payload["feature_enabled"] is True
+    assert verified_payload["feature_evidence"] == "features-list"
+    assert verified_payload["trust_status"] == "unverified"
+    assert verified_payload["runtime_activation"] == "unverified"
+    assert "capability_supported" not in verified_payload
+
+    human_verified = runner.invoke(
+        app,
+        [
+            "--data-root",
+            str(root),
+            "lifecycle",
+            "codex",
+            "verify",
+            binding_id,
+            "--hooks-file",
+            str(hooks_file),
+        ],
+    )
+    assert human_verified.exit_code == 0, human_verified.stdout
+    assert "configured=True" in human_verified.stdout
+    assert "binding_enabled=True" in human_verified.stdout
+    assert "feature_enabled=True" in human_verified.stdout
+    assert "trust=unverified" in human_verified.stdout
+    assert "runtime_activation=unverified" in human_verified.stdout
+    assert "/hooks" in human_verified.stdout
+    assert "runtime-authoritative" not in human_verified.stdout.casefold()
+
+    disabled = runner.invoke(
+        app,
+        [
+            "--data-root",
+            str(root),
+            "lifecycle",
+            "codex",
+            "disable",
+            binding_id,
+            "--json",
+        ],
+    )
+    assert disabled.exit_code == 0, disabled.stdout
+    assert json.loads(disabled.stdout)["enabled"] is False
+
+    uninstalled = runner.invoke(
+        app,
+        [
+            "--data-root",
+            str(root),
+            "lifecycle",
+            "codex",
+            "uninstall",
+            binding_id,
+            "--hooks-file",
+            str(hooks_file),
+            "--json",
+        ],
+    )
+    assert uninstalled.exit_code == 0, uninstalled.stdout
+    rendered = json.loads(hooks_file.read_text(encoding="utf-8"))
+    assert rendered["hooks"]["Stop"] == [
+        {"hooks": [{"type": "command", "command": "/usr/bin/keep-stop"}]}
+    ]
+
+
+def test_lifecycle_run_exposes_explicit_deduplicated_post_task_fallback(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    root = tmp_path / "data"
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    output_path = tmp_path / "post-task.handoff.mdc"
+    content = "# Verified post-task handoff\n"
+    output_path.write_text(content, encoding="utf-8")
+    generated: list[str] = []
+
+    def fake_generate(_self, project_reference, *, event, lifecycle_event_id):
+        generated.append(f"{event.value}:{lifecycle_event_id}")
+        return LifecycleArtifact(
+            output_id="out_post_task",
+            project_id=project_reference,
+            path=output_path,
+            sha256=hashlib.sha256(content.encode()).hexdigest(),
+            profile="codex-post-chat-v1",
+        )
+
+    monkeypatch.setattr(HandoffApplication, "generate_lifecycle_handoff", fake_generate)
+    created = runner.invoke(
+        app,
+        ["--data-root", str(root), "project", "create", "Post-task CLI", "--json"],
+    )
+    project_id = json.loads(created.stdout)["id"]
+    argv = [
+        "--data-root",
+        str(root),
+        "lifecycle",
+        "run",
+        "--event",
+        "post-task",
+        "--project",
+        project_id,
+        "--workspace",
+        str(workspace),
+        "--event-key",
+        "task-contract-1",
+        "--json",
+    ]
+
+    first = runner.invoke(app, argv)
+    duplicate = runner.invoke(app, argv)
+
+    assert first.exit_code == 0, first.stdout
+    assert duplicate.exit_code == 0, duplicate.stdout
+    assert json.loads(first.stdout) == json.loads(duplicate.stdout)
+    assert len(generated) == 1
+    assert output_path.name in json.loads(first.stdout)["systemMessage"]
+
+    failed = runner.invoke(
+        app,
+        [
+            "--data-root",
+            str(root),
+            "lifecycle",
+            "run",
+            "--event",
+            "post-task",
+            "--project",
+            project_id,
+            "--workspace",
+            str(tmp_path / "private missing workspace"),
+            "--event-key",
+            "task-contract-failure",
+            "--json",
+        ],
+    )
+    assert failed.exit_code == 2
+    assert str(tmp_path) not in failed.output
 
 
 def test_extensions_list_has_human_and_json_workflows(

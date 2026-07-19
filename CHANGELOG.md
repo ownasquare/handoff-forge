@@ -2,6 +2,28 @@
 
 All notable changes to Handoff Forge are recorded here.
 
+## 0.4.0 - 2026-07-19
+
+- Added opt-in Codex pre-compaction configuration with effective-feature gating, explicit `/hooks`
+  trust review, layered verification, and ownership-safe disable/uninstall; unavailable runtimes
+  fail before changing Codex hooks.
+- Added an explicit post-task lifecycle command because a Codex turn stop is not reliable evidence
+  that a task is complete.
+- Added durable lifecycle receipts, deterministic generation jobs, idempotent output recovery, and
+  verified hash/profile readback so retried events do not publish duplicate handoffs.
+- Added bounded, opt-in live checks for one text-only cloud-provider canary and one genuinely new
+  authenticated destination session, with sanitized proof output and no default network use.
+- Clarified exactly what an opted-in cloud run uploads, kept visual evidence behind separate
+  consent, and made source-checkout provider setup stay inside the documented `uv` environment.
+- Expanded lifecycle, contributor, extension, Docker cleanup, and proof-boundary documentation for
+  safer public adoption.
+- Added checksum and GitHub artifact-attestation gates before immutable release publication, plus
+  public verification instructions for both wheels and source archives.
+- Pinned every CI and release action to a reviewed commit SHA while retaining version comments and
+  Dependabot update coverage.
+- Validated and merged the artifact-action, ReportLab, mypy, and Google Gen AI dependency updates;
+  kept Chroma pinned after a mixed-version write test exposed a derived-index migration hazard.
+
 ## 0.3.0 - 2026-07-19
 
 - Focused the primary workflow on Files, Create handoff, and Start session, with advanced controls kept one step away from the core task.

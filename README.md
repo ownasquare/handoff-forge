@@ -47,6 +47,9 @@ Then open [http://127.0.0.1:8517](http://127.0.0.1:8517). The [getting-started g
 - Original files and generated handoffs stay in a private application-data folder.
 - Remote processing is off by default.
 - Choosing a remote provider still requires explicit consent for that run.
+- An opted-in cloud run sends its prompt and selected text evidence. Selected images require a
+  separate visual-upload consent; native PDFs and unrelated project files are never uploaded
+  automatically.
 - Remote links in Markdown are recorded but never fetched automatically.
 
 Read [Security and privacy](docs/security.md) before enabling network providers.
@@ -64,7 +67,9 @@ Read [Security and privacy](docs/security.md) before enabling network providers.
 
 ## Project status
 
-Version 0.3.0 is a local, single-user beta. Local validation does not imply hosted, multi-user, live-provider, or production readiness. See [current limitations](docs/limitations.md) for the exact boundaries.
+Version 0.4.0 is a local, single-user beta. Local validation does not imply hosted, multi-user,
+live-provider, authenticated-destination, or production readiness. See
+[current limitations](docs/limitations.md) for the exact boundaries.
 
 ## License
 

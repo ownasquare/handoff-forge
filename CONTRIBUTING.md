@@ -25,7 +25,7 @@ uv run mypy src
 uv run pytest -m "not live and not e2e"
 ```
 
-Add unit tests for pure behavior, integration tests for persistence or search, contract tests for public guarantees, and Playwright tests for rendered workflows. Live-provider checks must remain separately marked and explicitly opted in.
+Add unit tests for pure behavior, integration tests for persistence or search, contract tests for public guarantees, and Playwright tests for rendered workflows. Live provider and destination-session checks must remain separately marked and explicitly opted in.
 
 For the broad local code-and-package check, run `make validate`. It covers formatting, linting,
 typing, offline application tests, security scans, package building, and the public-repository
@@ -35,7 +35,7 @@ screenshot.
 
 ## Compatibility-sensitive changes
 
-Changes to section headings, confidence labels, profile wrappers, provider capabilities, storage schemas, or destination-app argument templates require:
+Changes to section headings, confidence labels, profile wrappers, provider capabilities, storage schemas, destination-app argument templates, or lifecycle hook configuration and event behavior require:
 
 - a compatibility note in `CHANGELOG.md`;
 - focused contract tests;
