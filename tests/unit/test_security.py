@@ -94,3 +94,11 @@ def test_bounded_regular_file_read_rejects_symlink_and_oversize(tmp_path: Path) 
         read_regular_file_bounded(oversized, max_bytes=32)
     with pytest.raises(StorageError, match="symbolic links"):
         read_regular_file_bounded(link, max_bytes=64)
+
+
+def test_bounded_regular_file_read_preserves_binary_bytes(tmp_path: Path) -> None:
+    payload = b"\x89PNG\r\n\x1a\nfixture\r\nbytes\x00\xff"
+    source = tmp_path / "fixture.bin"
+    source.write_bytes(payload)
+
+    assert read_regular_file_bounded(source, max_bytes=len(payload)) == payload

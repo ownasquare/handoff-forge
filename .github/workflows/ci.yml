@@ -12,8 +12,8 @@ jobs:
   quality:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@v7.0.0
+      - uses: astral-sh/setup-uv@v8.3.2
         with:
           enable-cache: true
           python-version: "3.11"
@@ -26,6 +26,25 @@ jobs:
       - run: uv run pip-audit
       - run: uv run python scripts/check_public_repo.py
       - run: uv build
+      - name: Write release artifact checksums
+        working-directory: dist
+        run: |
+          sha256sum *.whl *.tar.gz > SHA256SUMS
+          sha256sum --check SHA256SUMS
+      - name: Upload release artifact proof
+        uses: actions/upload-artifact@v7
+        with:
+          name: handoff-forge-ci-release-dist
+          path: dist
+          if-no-files-found: error
+      - name: Download release artifact proof
+        uses: actions/download-artifact@v8
+        with:
+          name: handoff-forge-ci-release-dist
+          path: ${{ runner.temp }}/handoff-forge-ci-release-dist
+      - name: Verify downloaded release artifacts
+        working-directory: ${{ runner.temp }}/handoff-forge-ci-release-dist
+        run: sha256sum --check SHA256SUMS
       - name: Smoke the built wheel in an isolated environment
         run: |
           uv venv "$RUNNER_TEMP/handoff-forge-wheel"
@@ -52,8 +71,8 @@ jobs:
             python-version: "3.13"
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@v7.0.0
+      - uses: astral-sh/setup-uv@v8.3.2
         with:
           enable-cache: true
           python-version: ${{ matrix.python-version }}
@@ -65,8 +84,8 @@ jobs:
   browser:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@v7.0.0
+      - uses: astral-sh/setup-uv@v8.3.2
         with:
           python-version: "3.11"
       - run: sudo apt-get update && sudo apt-get install -y tesseract-ocr
@@ -92,7 +111,7 @@ jobs:
         run: uv run pytest tests/e2e -m e2e -q
       - name: Upload browser proof
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: handoff-forge-browser-proof
           path: |

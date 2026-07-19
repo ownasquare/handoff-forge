@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 from streamlit.testing.v1 import AppTest
@@ -9,6 +10,7 @@ from streamlit.testing.v1 import AppTest
 from handoff_forge.application import HandoffApplication
 from handoff_forge.config import HandoffSettings
 from handoff_forge.extensions import ExtensionInfo
+from handoff_forge.harnesses.launcher import HarnessLauncher
 from handoff_forge.models import JobStatus, ModelRoute, ProviderCapabilities
 from handoff_forge.providers.base import ProviderStatus
 from handoff_forge.providers.registry import ProviderRegistry
@@ -466,7 +468,7 @@ def test_home_keeps_one_recommended_action_without_quick_action_duplicates(
 
     visible_copy = " ".join(str(item.value) for item in app.markdown)
     assert "Quick actions" not in visible_copy
-    assert any(button.label == "Start a session" for button in app.button)
+    assert sum(button.label == "Start a session" for button in app.button) == 1
 
 
 def test_primary_handoff_labels_are_friendly_and_omit_hashes(tmp_path: Path) -> None:
@@ -682,14 +684,24 @@ def test_launch_preview_matching_binds_every_reviewed_input() -> None:
 
 
 def test_launch_preview_is_invalidated_when_model_changes(monkeypatch, tmp_path: Path) -> None:
+    data_root = tmp_path / "handoff-data"
     settings = HandoffSettings(
-        data_root=tmp_path / "handoff-data",
+        data_root=data_root,
         offline=True,
         allow_network=False,
     )
-    HandoffApplication(settings=settings).materialize_demo()
-    monkeypatch.setattr(HandoffApplication, "available_harnesses", lambda self: ("codex",))
-    app = _app_test(monkeypatch, tmp_path).run()
+    data_root.mkdir(parents=True)
+    application = HandoffApplication(
+        settings=settings,
+        launcher=HarnessLauncher(
+            managed_root=data_root,
+            executable_resolver=lambda candidate: sys.executable if candidate == "codex" else None,
+        ),
+    )
+    application.materialize_demo()
+    app = _app_test(monkeypatch, tmp_path)
+    app.session_state["_application_override"] = application
+    app.run()
     _element_by_label(app.radio, "Workspace navigation").set_value("continue")
     app.run()
 

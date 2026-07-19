@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
+from typer.main import get_command
 from typer.testing import CliRunner
 
 from handoff_forge.application import HandoffApplication
@@ -184,12 +185,11 @@ def test_ui_dry_run_includes_validated_host_and_launch_accepts_dry_run(tmp_path:
             "--json",
         ],
     )
-    launch_help = runner.invoke(app, ["launch", "--help"])
+    launch = get_command(app).commands["launch"]
 
     assert ui.exit_code == 0, ui.stdout
     payload = json.loads(ui.stdout)
     assert payload["executed"] is False
     assert ALL_INTERFACES in payload["argv"]
     assert "8765" in payload["argv"]
-    assert launch_help.exit_code == 0
-    assert "--dry-run" in launch_help.stdout
+    assert any("--dry-run" in parameter.opts for parameter in launch.params)

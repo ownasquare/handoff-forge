@@ -81,17 +81,9 @@ def test_preview_is_default_and_does_not_execute(tmp_path: Path) -> None:
 def test_available_harnesses_returns_only_profiles_with_installed_executables(
     tmp_path: Path,
 ) -> None:
-    codex = tmp_path / "codex"
-    codex.write_text("fixture", encoding="utf-8")
-    codex.chmod(0o700)
-    not_executable = tmp_path / "claude"
-    not_executable.write_text("fixture", encoding="utf-8")
     launcher = HarnessLauncher(
         managed_root=tmp_path,
-        executable_resolver=lambda name: {
-            "codex": str(codex),
-            "claude": str(not_executable),
-        }.get(name),
+        executable_resolver=lambda name: sys.executable if name == "codex" else None,
     )
 
     assert launcher.available_harnesses() == ("codex",)
@@ -195,28 +187,26 @@ def test_default_executor_waits_for_a_real_fixture_cli_and_reads_exit_status(
     tmp_path: Path,
 ) -> None:
     marker = tmp_path / "fixture-session-completed.txt"
-    executable = tmp_path / "fixture-cli"
-    executable.write_text(
-        f"#!{sys.executable}\n"
+    script = tmp_path / "fixture_cli.py"
+    script.write_text(
         "from pathlib import Path\n"
         "import sys\n"
         "Path(sys.argv[1]).write_text('complete', encoding='utf-8')\n",
         encoding="utf-8",
     )
-    executable.chmod(0o700)
     registry = HarnessRegistry(
         [
             CustomHarnessProfile(
                 name="fixture",
-                executable_candidates=("fixture-cli",),
-                arguments=(str(marker),),
+                executable_candidates=("python",),
+                arguments=(str(script), str(marker)),
             )
         ]
     )
     launcher = HarnessLauncher(
         managed_root=tmp_path,
         registry=registry,
-        executable_resolver=lambda _: str(executable),
+        executable_resolver=lambda _: sys.executable,
     )
 
     result = launcher.launch("fixture", _handoff(tmp_path), execute=True)

@@ -202,21 +202,25 @@ def test_first_time_flow_files_create_start_and_optional_combine(page: Page) -> 
             ROOT / "examples" / "northstar-continuity-review.pdf",
         ]
     )
-    page.locator('[data-testid="stBaseButton-primary"]:visible').filter(
+    add_files_action = page.locator('[data-testid="stBaseButton-primary"]:visible').filter(
         has_text="Add files"
-    ).click()
+    )
+    add_files_action.click()
     expect(page.get_by_text("Added 3 files.", exact=False)).to_be_visible(timeout=30_000)
     expect(page.get_by_text("3 files ready", exact=False)).to_be_visible()
+    expect(add_files_action).to_be_disabled()
     assert page.locator('input[type="file"]').evaluate("(element) => element.files.length") == 0
 
     uploader = page.locator('input[type="file"]')
     uploader.set_input_files(ROOT / "examples" / "handoffs" / "project-alpha.mdc")
-    page.locator('[data-testid="stBaseButton-primary"]:visible').filter(
-        has_text="Add files"
-    ).click()
+    expect(add_files_action).to_be_enabled()
+    add_files_action.click()
     expect(page.get_by_text("That file was already in this workspace.", exact=True)).to_be_visible(
         timeout=30_000
     )
+    # The flash message is rendered before Streamlit finishes replacing the uploader.
+    # Waiting for the action to disable proves the new empty widget has reached the browser.
+    expect(add_files_action).to_be_disabled()
     assert page.locator('input[type="file"]').evaluate("(element) => element.files.length") == 0
 
     review_files = page.get_by_role("switch", name="Review files", exact=True)
@@ -275,7 +279,13 @@ def test_first_time_flow_files_create_start_and_optional_combine(page: Page) -> 
     )
 
     _select_workspace_view(page, "Home")
-    expect(page.get_by_role("button", name="Start a session", exact=True)).to_be_visible()
+    start_session = page.get_by_test_id("stMain").get_by_role(
+        "button", name="Start a session", exact=True
+    )
+    # Streamlit can briefly retain the previous view while replacing the main tree.
+    # Wait for the Home view to settle before applying a strict visibility check.
+    expect(start_session).to_have_count(1)
+    expect(start_session).to_be_visible()
     expect(page.get_by_text("Quick actions", exact=True)).to_have_count(0)
     _reset_main_scroll(page)
     page.wait_for_timeout(500)
