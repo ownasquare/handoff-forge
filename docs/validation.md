@@ -17,13 +17,13 @@ The default test suite excludes `live` and `e2e`. Browser E2E uses Playwright. T
 the offline workflow. Screenshots are inspected after capture for errors, clipping, overflow,
 readability, and state correctness.
 
-The 0.3.0 local release gate completed 190 offline tests at 82.03% branch coverage and four rendered
-Playwright scenarios. A fresh wheel install completed doctor and the bundled demo; the documented
-example extension generated a handoff; and a non-root Linux/arm64 container passed doctor and UI
-health checks under a read-only filesystem with dropped capabilities. GitHub-hosted CI and release
-readback remain unperformed until the repository is published. The tag workflow is configured to
-rerun quality, security, compatibility, and browser gates before building and checksumming
-release assets; that configuration becomes hosted evidence only after a real run completes.
+The current 0.3.0 local release gate completes 216 offline tests at 82.49% branch coverage and four
+rendered Playwright scenarios. A fresh wheel install completed doctor and the bundled demo; the
+documented example extension generated a handoff; and a non-root Linux/arm64 container passed doctor
+and UI health checks under a read-only filesystem with dropped capabilities. Public GitHub CI repeats
+quality, security, package, browser, and Linux/macOS/Windows compatibility checks on every change to
+`main` and every pull request. The tag workflow repeats those gates before building and checksumming
+release assets; a release is proven separately only after that tag workflow and asset readback pass.
 
 ## Open Source Adoption release checks
 
