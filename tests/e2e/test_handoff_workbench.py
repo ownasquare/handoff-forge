@@ -279,7 +279,13 @@ def test_first_time_flow_files_create_start_and_optional_combine(page: Page) -> 
     )
 
     _select_workspace_view(page, "Home")
-    expect(page.get_by_role("button", name="Start a session", exact=True)).to_be_visible()
+    start_session = page.get_by_test_id("stMain").get_by_role(
+        "button", name="Start a session", exact=True
+    )
+    # Streamlit can briefly retain the previous view while replacing the main tree.
+    # Wait for the Home view to settle before applying a strict visibility check.
+    expect(start_session).to_have_count(1)
+    expect(start_session).to_be_visible()
     expect(page.get_by_text("Quick actions", exact=True)).to_have_count(0)
     _reset_main_scroll(page)
     page.wait_for_timeout(500)
