@@ -26,6 +26,25 @@ jobs:
       - run: uv run pip-audit
       - run: uv run python scripts/check_public_repo.py
       - run: uv build
+      - name: Write release artifact checksums
+        working-directory: dist
+        run: |
+          sha256sum *.whl *.tar.gz > SHA256SUMS
+          sha256sum --check SHA256SUMS
+      - name: Upload release artifact proof
+        uses: actions/upload-artifact@v7
+        with:
+          name: handoff-forge-ci-release-dist
+          path: dist
+          if-no-files-found: error
+      - name: Download release artifact proof
+        uses: actions/download-artifact@v8
+        with:
+          name: handoff-forge-ci-release-dist
+          path: ${{ runner.temp }}/handoff-forge-ci-release-dist
+      - name: Verify downloaded release artifacts
+        working-directory: ${{ runner.temp }}/handoff-forge-ci-release-dist
+        run: sha256sum --check SHA256SUMS
       - name: Smoke the built wheel in an isolated environment
         run: |
           uv venv "$RUNNER_TEMP/handoff-forge-wheel"
