@@ -106,7 +106,7 @@ def test_versioned_profile_fixtures_validate(
     profile: TemplateProfile,
 ) -> None:
     fixture = ROOT / "tests/fixtures/handoffs" / filename
-    assert validate_handoff(fixture.read_text(), profile).valid
+    assert validate_handoff(fixture.read_text(encoding="utf-8"), profile).valid
 
 
 def test_post_chat_profile_has_frontmatter_inventory_and_twelve_sections() -> None:

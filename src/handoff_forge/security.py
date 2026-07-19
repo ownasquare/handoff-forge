@@ -102,7 +102,12 @@ def read_regular_file_bounded(
     if stat.S_ISLNK(before.st_mode):
         raise StorageError(f"symbolic links are not allowed: {path}")
 
-    flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+    flags = (
+        os.O_RDONLY
+        | getattr(os, "O_BINARY", 0)
+        | getattr(os, "O_CLOEXEC", 0)
+        | getattr(os, "O_NOFOLLOW", 0)
+    )
     descriptor: int | None = None
     try:
         descriptor = os.open(path, flags)

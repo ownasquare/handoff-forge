@@ -44,13 +44,13 @@ Tesseract is optional. Without it, Handoff Forge keeps each PDF page image and s
 
 | Platform | Current path | Status |
 |---|---|---|
-| Linux | Source or Docker | Linux/arm64 container build, doctor, and UI health verified locally; hosted CI is configured |
-| macOS | Source or Docker Desktop | Source, wheel, browser, and Playwright workflows verified locally; hosted CI is configured |
-| Windows 11 | Docker Desktop recommended | Source smoke CI is configured but has not yet run on GitHub; native runtime is not locally verified |
+| Linux | Source or Docker | Hosted CI covers Python 3.11–3.13; local container, doctor, UI, and browser proof is also available |
+| macOS | Source or Docker Desktop | Hosted Python 3.13 unit, contract, doctor, and demo smoke complements local source, wheel, and browser proof |
+| Windows 11 | Docker Desktop recommended | Hosted Python 3.13 unit, contract, doctor, and demo smoke covers the native core; Docker Desktop remains the simplest full path |
 
-The first GitHub Actions run after publication is still required before treating the configured Linux,
-macOS, and Windows matrix as hosted proof. Until native Windows verification is published, use Docker
-Desktop rather than treating native Windows support as proven.
+GitHub Actions repeats the compatibility matrix on every change to `main` and every pull request.
+Windows users who want the same bundled Tesseract and browser environment used by the container proof
+should choose Docker Desktop.
 
 ## Create your first handoff
 
