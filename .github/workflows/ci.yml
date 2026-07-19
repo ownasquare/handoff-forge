@@ -92,7 +92,7 @@ jobs:
         run: uv run pytest tests/e2e -m e2e -q
       - name: Upload browser proof
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: handoff-forge-browser-proof
           path: |
