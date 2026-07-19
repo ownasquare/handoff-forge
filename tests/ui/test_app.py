@@ -468,7 +468,7 @@ def test_home_keeps_one_recommended_action_without_quick_action_duplicates(
 
     visible_copy = " ".join(str(item.value) for item in app.markdown)
     assert "Quick actions" not in visible_copy
-    assert any(button.label == "Start a session" for button in app.button)
+    assert sum(button.label == "Start a session" for button in app.button) == 1
 
 
 def test_primary_handoff_labels_are_friendly_and_omit_hashes(tmp_path: Path) -> None:

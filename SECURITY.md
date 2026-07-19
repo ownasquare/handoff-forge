@@ -6,10 +6,10 @@ Security updates are applied to the current 0.3.x beta line.
 
 ## Report privately
 
-Use GitHub private vulnerability reporting after the repository is published. If that channel is
-not available, open a minimal issue asking the maintainer to establish private contact; include no
-vulnerability detail, credentials, private documents, exploitable samples, or command-injection
-payloads in the public issue.
+Use [GitHub private vulnerability reporting](https://github.com/ownasquare/handoff-forge/security/advisories/new).
+If that channel is temporarily unavailable, open a minimal issue asking the maintainer to establish
+private contact; include no vulnerability detail, credentials, private documents, exploitable
+samples, or command-injection payloads in the public issue.
 
 Include the affected version, operating system, exact reproduction steps, impact, and a minimized
 sanitized fixture. Maintainers will acknowledge a complete report, reproduce it in an isolated
