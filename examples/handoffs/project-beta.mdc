@@ -1,0 +1,51 @@
+# Project Alpha Handoff
+
+## 1. Project Identity & Strategic Context
+Project Alpha preserves long-running AI engineering context across compaction.
+
+## 2. Current System State & Architecture Map
+API status is blocked. The API listens on port 9000.
+
+## 3. Critical Decisions & Reasoning History
+Every merge keeps both contradictory claims visible.
+
+## 4. Recent Work & Iteration Log (High Priority)
+The continuation plan design was reviewed.
+
+## 5. Testing, Validation & Quality Framework
+Run pytest, schema validation, and deterministic merge checks.
+
+## 6. Debugging History & Failure Modes
+Input ordering previously changed source labels.
+
+## 7. Established Processes & Effective Patterns
+Sort sources by semantic content hash before assigning citations.
+
+## 8. Risks, Technical Debt & Strict Preservation Rules
+Never delete the rollback snapshot.
+
+## 9. Key Artifacts & References
+The source handoff hashes are durable provenance.
+
+## 10. Next Steps & Prioritized Backlog
+- [P0] Finish the API handoff validation.
+
+## 11. Continuation & Working Style Instructions
+Keep unresolved equal-confidence conflicts in review-required state.
+
+## 12. Confidence & Freshness Assessment
+Assessment covers Sections 1 through 11 only.
+
+### Section assessments
+
+- Section 1 — High - Recently verified in the current session.
+- Section 2 — High - Recently verified in the current session.
+- Section 3 — High - Recently verified in the current session.
+- Section 4 — High - Recently verified in the current session.
+- Section 5 — High - Recently verified in the current session.
+- Section 6 — High - Recently verified in the current session.
+- Section 7 — High - Recently verified in the current session.
+- Section 8 — High - Recently verified in the current session.
+- Section 9 — High - Recently verified in the current session.
+- Section 10 — High - Recently verified in the current session.
+- Section 11 — High - Recently verified in the current session.

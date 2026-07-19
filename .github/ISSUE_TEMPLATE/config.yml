@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Troubleshooting guide
+    url: https://github.com/ownasquare/handoff-forge/blob/main/docs/troubleshooting.md
+    about: Resolve common installation, OCR, storage, destination-app, and provider problems.
+  - name: Report a security vulnerability privately
+    url: https://github.com/ownasquare/handoff-forge/security/advisories/new
+    about: Do not post vulnerabilities, credentials, or confidential files in a public issue.

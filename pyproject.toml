@@ -1,0 +1,154 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "handoff-forge"
+dynamic = ["version"]
+description = "Local-first multimodal handoff generation, merge planning, and AI harness continuation"
+readme = "README.md"
+requires-python = ">=3.11,<3.14"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Handoff Forge Contributors" }]
+keywords = ["ai-harness", "handoff", "mdc", "multimodal", "llamaindex", "chroma", "streamlit"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+  "chromadb==0.6.3",
+  "filelock>=3.19,<4",
+  "llama-index-core==0.14.23",
+  "markdown-it-py>=4,<5",
+  "mdit-py-plugins>=0.5,<1",
+  "overrides>=7.7,<8",
+  "pdfplumber==0.11.10",
+  "pillow>=12.1,<13",
+  "platformdirs>=4.4,<5",
+  "pydantic==2.13.4",
+  "pydantic-settings==2.14.2",
+  "pypdfium2>=5.9,<6",
+  "pytesseract==0.3.13",
+  "pyyaml>=6.0.2,<7",
+  "streamlit==1.59.2",
+  "typer>=0.21,<1",
+]
+
+[project.optional-dependencies]
+providers = [
+  "anthropic>=0.84,<1",
+  "google-genai>=1.63,<2",
+  "openai>=2.46,<3",
+  "voyageai>=0.3,<1",
+  "xai-sdk>=1,<2",
+]
+
+[project.scripts]
+handoff-forge = "handoff_forge.cli:app"
+
+[project.urls]
+Homepage = "https://github.com/ownasquare/handoff-forge"
+Documentation = "https://github.com/ownasquare/handoff-forge/tree/main/docs"
+Repository = "https://github.com/ownasquare/handoff-forge"
+Issues = "https://github.com/ownasquare/handoff-forge/issues"
+Changelog = "https://github.com/ownasquare/handoff-forge/blob/main/CHANGELOG.md"
+
+[dependency-groups]
+dev = [
+  "bandit>=1.8,<2",
+  "build>=1.4,<2",
+  "mypy>=1.19,<2",
+  "pip-audit>=2.9,<3",
+  "pytest==9.1.1",
+  "pytest-cov>=7,<8",
+  "pytest-playwright>=0.7,<1",
+  "pytest-socket>=0.7,<1",
+  "reportlab>=4.4,<5",
+  "ruff>=0.15,<1",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/handoff_forge"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"examples/handoffs" = "handoff_forge/resources/handoffs"
+"examples/northstar-continuity-review.pdf" = "handoff_forge/resources/northstar-continuity-review.pdf"
+
+[tool.hatch.version]
+path = "src/handoff_forge/__init__.py"
+
+[tool.hatch.build.targets.sdist]
+exclude = [
+  "/dist",
+  "/docs/ai-harness-handoff-system",
+  "/docs/handoff-forge",
+  "/docs/handoffs",
+  "/docs/superpowers",
+]
+
+[tool.pytest.ini_options]
+addopts = "-ra --strict-config --strict-markers"
+testpaths = ["tests"]
+pythonpath = ["."]
+markers = [
+  "integration: exercises persistent local storage or Chroma",
+  "live: makes an explicitly opted-in provider call",
+  "ui: exercises Streamlit presentation behavior",
+  "e2e: exercises the rendered Streamlit application with Playwright",
+]
+
+[tool.coverage.run]
+branch = true
+source = ["handoff_forge"]
+omit = ["src/handoff_forge/ui/app.py"]
+
+[tool.coverage.report]
+fail_under = 80
+show_missing = true
+skip_covered = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "S", "RUF"]
+ignore = ["S101"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S101", "S105", "S106", "S108"]
+"scripts/**/*.py" = ["S603", "S607"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+plugins = ["pydantic.mypy"]
+packages = ["handoff_forge"]
+warn_unreachable = true
+
+[[tool.mypy.overrides]]
+module = [
+  "chromadb.*",
+  "llama_index.*",
+  "markdown_it.*",
+  "mdit_py_plugins.*",
+  "pdfplumber.*",
+  "pypdfium2.*",
+  "pytesseract.*",
+  "reportlab.*",
+  "streamlit.*",
+]
+ignore_missing_imports = true
+
+[tool.bandit]
+exclude_dirs = ["tests"]
+skips = ["B101"]

@@ -1,0 +1,5 @@
+* text=auto
+
+# Keep generated visual fixtures and screenshots out of text diffs and whitespace checks.
+*.pdf binary
+*.png binary

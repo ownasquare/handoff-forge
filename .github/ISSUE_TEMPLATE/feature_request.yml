@@ -1,0 +1,58 @@
+name: Feature request
+description: Suggest a focused improvement to the local handoff workflow.
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe the user problem, not private project content. Requests that change storage, uploads, providers, or external actions must explain their privacy impact.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem should this solve?
+      placeholder: Explain who is blocked and at which step.
+    validations:
+      required: true
+  - type: textarea
+    id: workflow
+    attributes:
+      label: Preferred workflow
+      description: Describe the smallest clear interaction that would solve the problem.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: dropdown
+    id: area
+    attributes:
+      label: Product area
+      options:
+        - Files
+        - Create handoff
+        - Combine
+        - Start session
+        - Installation and documentation
+        - Provider or destination-app extension
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: privacy
+    attributes:
+      label: Privacy and network impact
+      description: State whether this changes local storage, remote uploads, credentials, or external process behavior. Use "None" when it does not.
+    validations:
+      required: true
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Privacy check
+      options:
+        - label: I included no credentials, private source material, private handoffs, or identifying local paths.
+          required: true
+        - label: I checked existing issues for a similar request.
+          required: true

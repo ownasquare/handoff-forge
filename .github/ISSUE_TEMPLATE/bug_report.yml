@@ -1,0 +1,75 @@
+name: Bug report
+description: Report a reproducible problem using synthetic or sanitized information.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve Handoff Forge. Never attach API keys, private source files, generated private handoffs, application-data folders, or unreviewed logs.
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened?
+      description: Describe the problem without including private project content.
+      placeholder: A concise description of the visible problem.
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: Install method
+      options:
+        - Docker Compose
+        - Source install with uv
+        - Built wheel or release artifact
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Handoff Forge version
+      placeholder: 0.3.0
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: Operating system and runtime
+      placeholder: Ubuntu 24.04 and Python 3.12, or Docker Desktop 4.x
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction steps
+      description: Use the bundled sample or a minimal synthetic fixture.
+      placeholder: |
+        1. Start the app with ...
+        2. Open ...
+        3. Select ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected result
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Sanitized diagnostics
+      description: Include only reviewed output from `handoff-forge doctor`; remove usernames and local paths.
+      render: shell
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Privacy check
+      options:
+        - label: I reviewed this report and removed credentials, private documents, private handoffs, and identifying local paths.
+          required: true
+        - label: I searched existing issues and the troubleshooting guide first.
+          required: true
