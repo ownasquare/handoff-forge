@@ -17,4 +17,6 @@ Harassment, threats, discriminatory language, personal attacks, publishing anoth
 
 Maintainers may edit or remove content, close contributions, or restrict participation when needed to protect the community. Enforcement decisions should be proportionate, documented privately, and applied consistently.
 
-Report conduct concerns through a private contact method listed on the repository owner's GitHub profile. If that route is unavailable or the concern involves a maintainer, use GitHub's reporting tools. Do not post sensitive conduct reports in a public issue.
+Use GitHub's reporting tools for the relevant content or account. If project maintainer action is
+also needed, open a minimal issue asking to establish private contact, without including the conduct
+details. Do not post sensitive conduct reports in a public issue.
