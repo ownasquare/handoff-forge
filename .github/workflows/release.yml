@@ -12,13 +12,17 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7.0.0
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
+          fetch-depth: 0
           persist-credentials: false
-      - uses: astral-sh/setup-uv@v8.3.2
+      - name: Require the tagged commit to be on main before privileged jobs
+        run: git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
         with:
           enable-cache: true
           python-version: "3.11"
+      - run: uv lock --check
       - run: uv sync --frozen
       - name: Verify tag and package version
         run: uv run python scripts/verify_release_tag.py "$GITHUB_REF_NAME"
@@ -49,10 +53,10 @@ jobs:
             python-version: "3.13"
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v7.0.0
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
-      - uses: astral-sh/setup-uv@v8.3.2
+      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
         with:
           enable-cache: true
           python-version: ${{ matrix.python-version }}
@@ -65,10 +69,10 @@ jobs:
     needs: verify
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7.0.0
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
-      - uses: astral-sh/setup-uv@v8.3.2
+      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
         with:
           python-version: "3.11"
       - run: sudo apt-get update && sudo apt-get install -y tesseract-ocr
@@ -94,7 +98,7 @@ jobs:
         run: uv run pytest tests/e2e -m e2e -q
       - name: Upload browser proof
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: handoff-forge-release-browser-proof
           path: |
@@ -111,10 +115,10 @@ jobs:
     needs: verify
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7.0.0
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
-      - uses: astral-sh/setup-uv@v8.3.2
+      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
         with:
           enable-cache: true
           python-version: "3.11"
@@ -132,7 +136,7 @@ jobs:
         run: |
           sha256sum *.whl *.tar.gz > SHA256SUMS
           sha256sum --check SHA256SUMS
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: handoff-forge-release-dist
           path: |
@@ -141,25 +145,55 @@ jobs:
             dist/SHA256SUMS
           if-no-files-found: error
 
-  release:
+  attest:
     needs: [build, compatibility, browser]
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
+      id-token: write
+      attestations: write
     steps:
-      - uses: actions/checkout@v7.0.0
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: handoff-forge-release-dist
+          path: dist
+      - name: Verify build artifacts before attestation
+        working-directory: dist
+        run: sha256sum --check SHA256SUMS
+      - name: Generate build provenance
+        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4.2.0
+        with:
+          subject-checksums: dist/SHA256SUMS
+
+  release:
+    needs: attest
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      attestations: read
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
           persist-credentials: false
       - name: Require the tagged commit to be on main
         run: git merge-base --is-ancestor "$GITHUB_SHA" origin/main
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: handoff-forge-release-dist
           path: dist
       - name: Verify downloaded release assets
         working-directory: dist
         run: sha256sum --check SHA256SUMS
+      - name: Verify downloaded release provenance
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for asset in dist/*.whl dist/*.tar.gz; do
+            gh attestation verify "$asset" \
+              --repo "$GITHUB_REPOSITORY" \
+              --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yml"
+          done
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}

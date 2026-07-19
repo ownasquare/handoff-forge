@@ -34,6 +34,7 @@ from handoff_forge.handoffs.profiles import handoff_filename, render_handoff
 from handoff_forge.handoffs.validator import validate_handoff
 from handoff_forge.harnesses.base import ActionResult, LaunchResult
 from handoff_forge.harnesses.launcher import HarnessLauncher
+from handoff_forge.harnesses.lifecycle import LifecycleArtifact, lifecycle_job_id
 from handoff_forge.harnesses.platform import PlatformActions
 from handoff_forge.harnesses.registry import build_default_harness_registry
 from handoff_forge.ingestion.nodes import NodeBuilder
@@ -466,16 +467,92 @@ class HandoffApplication:
         profile: TemplateProfile | None = None,
         routes: Mapping[int, ModelRoute] | None = None,
     ) -> GenerationOutcome:
+        return self._generate_handoff(
+            project_reference,
+            mode=mode,
+            profile=profile,
+            routes=routes,
+        )
+
+    def generate_lifecycle_handoff(
+        self,
+        project_reference: str,
+        *,
+        event: HandoffMode = HandoffMode.PRE_COMPACT,
+        lifecycle_event_id: str,
+    ) -> LifecycleArtifact:
+        """Create or resume exactly one offline lifecycle output."""
+
+        profile = (
+            TemplateProfile.CODEX_PRECOMPACT_V1
+            if event is HandoffMode.PRE_COMPACT
+            else TemplateProfile.CODEX_POST_CHAT_V1
+        )
+
+        outcome = self._generate_handoff(
+            project_reference,
+            mode=event,
+            profile=profile,
+            routes=_offline_routes(),
+            job_id=lifecycle_job_id(lifecycle_event_id),
+        )
+        if (
+            outcome.job.status is not JobStatus.COMPLETE
+            or outcome.output is None
+            or outcome.validation is None
+            or not outcome.validation.valid
+        ):
+            raise StorageError("lifecycle generation did not produce a validated output")
+        output = self.store.get_output(outcome.output.project_id, outcome.output.id)
+        if output.metadata.get("profile") != profile.value:
+            raise StorageError("lifecycle output profile failed readback")
+        self.validate_output(
+            output.project_id,
+            output.id,
+            profile,
+        )
+        return LifecycleArtifact(
+            output_id=output.id,
+            project_id=output.project_id,
+            path=output.stored_path,
+            sha256=output.sha256,
+            profile=profile.value,
+        )
+
+    def _generate_handoff(
+        self,
+        project_reference: str,
+        *,
+        mode: HandoffMode,
+        profile: TemplateProfile | None,
+        routes: Mapping[int, ModelRoute] | None,
+        job_id: str | None = None,
+    ) -> GenerationOutcome:
         project = self.resolve_project(project_reference)
         selected_profile = profile or _profile_for_mode(mode)
         route_matrix = dict(routes or _offline_routes())
         if set(route_matrix) != set(range(1, 13)):
             raise ValueError("route matrix must contain Sections 1 through 12")
         runner = self._job_runner(project, route_matrix)
+        if job_id is not None and self.store.job_checkpoint_exists(project.id, job_id):
+            existing = _StoreCheckpointAdapter(self.store, project.id).load(job_id)
+            if (
+                existing.mode != mode
+                or existing.profile != selected_profile
+                or existing.route_matrix != route_matrix
+            ):
+                raise StorageError("lifecycle job checkpoint does not match the requested profile")
+            completed = (
+                runner.run(job_id)
+                if existing.status is JobStatus.COMPLETE
+                else runner.resume(job_id)
+            )
+            return self._finalize_job(runner, completed)
         job = runner.create_job(
             mode=mode,
             profile=selected_profile,
             route_matrix=route_matrix,
+            job_id=job_id,
         )
         return self._finalize_job(runner, runner.run(job.id))
 
@@ -863,6 +940,7 @@ class HandoffApplication:
                     "mode": package.mode.value,
                     "profile": package.profile.value,
                 },
+                idempotency_key=f"generation-job:{job.id}",
             )
             output = self._output_for_path(job.project_id, destination)
             job.output_path = output.stored_path

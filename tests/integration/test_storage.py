@@ -86,6 +86,84 @@ def test_store_rejects_spoofed_pdf(settings) -> None:
         store.put_upload("project.pdf", b"not a pdf", project_id=project.id)
 
 
+@pytest.mark.parametrize("failure_point", ["payload", "manifest", "project-reference"])
+def test_output_idempotency_recovers_each_commit_boundary_without_duplicates(
+    settings,
+    monkeypatch: pytest.MonkeyPatch,
+    failure_point: str,
+) -> None:
+    store = ContentAddressedStore(settings)
+    project = store.create_project("Output crash recovery")
+    project_directory = store.project_dir(project.id)
+    real_write_bytes = store._atomic_write_bytes
+    real_write_json = store._atomic_write_json
+    real_write_model = store._write_model
+    interrupted = False
+
+    def interrupt_payload_write(path, content):
+        nonlocal interrupted
+        result = real_write_bytes(path, content)
+        if failure_point == "payload" and path.parent.name == "outputs" and not interrupted:
+            interrupted = True
+            raise OSError("simulated payload interruption")
+        return result
+
+    def interrupt_manifest_write(path, data):
+        nonlocal interrupted
+        result = real_write_json(path, data)
+        if (
+            failure_point == "manifest"
+            and path.parent.name == "outputs"
+            and path.parent.parent.name == "manifests"
+            and not interrupted
+        ):
+            interrupted = True
+            raise OSError("simulated manifest interruption")
+        return result
+
+    def interrupt_project_update(path, model):
+        nonlocal interrupted
+        result = real_write_model(path, model)
+        if (
+            failure_point == "project-reference"
+            and path.name == "project.json"
+            and model.output_ids
+            and not interrupted
+        ):
+            interrupted = True
+            raise OSError("simulated project-reference interruption")
+        return result
+
+    monkeypatch.setattr(store, "_atomic_write_bytes", interrupt_payload_write)
+    monkeypatch.setattr(store, "_atomic_write_json", interrupt_manifest_write)
+    monkeypatch.setattr(store, "_write_model", interrupt_project_update)
+    with pytest.raises(OSError, match=r"simulated .* interruption"):
+        store.put_output(
+            project.id,
+            "lifecycle.mdc",
+            "# First committed output\n",
+            idempotency_key="generation-job:job-safe-fixture",
+        )
+
+    assert interrupted is True
+
+    restarted = ContentAddressedStore(settings)
+    recovered = restarted.put_output(
+        project.id,
+        "lifecycle.mdc",
+        "# A retry must not create this second output\n",
+        idempotency_key="generation-job:job-safe-fixture",
+    )
+
+    repaired = restarted.load_project(project.id)
+    assert recovered.read_text(encoding="utf-8") == "# First committed output\n"
+    assert len(repaired.output_ids) == 1
+    assert len(restarted.list_outputs(project.id)) == 1
+    assert restarted.list_outputs(project.id)[0].stored_path == recovered
+    assert len(list((project_directory / "outputs").iterdir())) == 1
+    assert len(list((project_directory / "manifests" / "outputs").glob("*.json"))) == 1
+
+
 def test_committed_artifact_deletion_keeps_retryable_tombstone_on_partial_cleanup(
     settings,
     monkeypatch: pytest.MonkeyPatch,

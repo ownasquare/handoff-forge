@@ -65,9 +65,9 @@ VIEWS = tuple(view.key for view in PRIMARY_WORKSPACE_VIEWS)
 _MODEL_DEFAULTS = {
     "offline": "extractive-v1",
     "openai": "gpt-4.1-mini",
-    "anthropic": "claude-sonnet-4-20250514",
+    "anthropic": "claude-sonnet-4-6",
     "google": "gemini-2.5-flash",
-    "xai": "grok-3-mini",
+    "xai": "grok-4.5",
 }
 _PROFILE_LABELS = {
     TemplateProfile.CODEX_PRECOMPACT_V1: "Save progress",

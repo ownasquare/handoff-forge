@@ -275,6 +275,33 @@ class FakeGoogleModels:
         )
 
 
+def test_google_client_converts_timeout_seconds_to_http_options_milliseconds(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    class FakeHttpOptions:
+        def __init__(self, **kwargs: object) -> None:
+            captured["http_options"] = kwargs
+
+    class FakeGoogleClient:
+        def __init__(self, **kwargs: object) -> None:
+            captured["client"] = kwargs
+
+    module = SimpleNamespace(
+        Client=FakeGoogleClient,
+        types=SimpleNamespace(HttpOptions=FakeHttpOptions),
+    )
+    provider = GoogleProvider(timeout_seconds=5)
+    monkeypatch.setattr(provider, "_import_module", lambda: module)
+
+    provider._build_client()
+
+    assert captured["http_options"] == {"api_version": "v1", "timeout": 5_000}
+    assert isinstance(captured["client"], dict)
+    assert isinstance(captured["client"]["http_options"], FakeHttpOptions)
+
+
 def test_google_adapter_uses_google_genai_with_injected_client() -> None:
     client = SimpleNamespace(models=FakeGoogleModels())
     provider = GoogleProvider(

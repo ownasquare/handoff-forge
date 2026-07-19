@@ -11,23 +11,29 @@ Handoff Forge separates proof layers so one green result does not imply another.
 | Package | Wheel and sdist build, fresh-environment install, entry point, and offline demo |
 | Container | Image build, Tesseract presence, non-root startup, persistent volume, and browser smoke |
 | Live provider | One explicitly enabled provider/model route with real account and usage evidence |
+| Live destination | One explicitly enabled, genuinely new destination session with fixed-token readback |
+| Codex hook configuration | Valid merged schema, exact ownership, reversible state, effective feature readback, and deduplicated fixture delivery |
+| Codex hook runtime | A trusted hook delivered a real manual or automatic compaction event and produced a verified artifact |
 | Hosted/production | External identity, data, network, scaling, monitoring, backup, and operations in that environment |
 
 The default test suite excludes `live` and `e2e`. Browser E2E uses Playwright. Tests deny sockets for
 the offline workflow. Screenshots are inspected after capture for errors, clipping, overflow,
 readability, and state correctness.
 
-The current 0.3.0 local release gate completes 216 offline tests at 82.49% branch coverage and four
+The current 0.4.0 local release gate runs the complete offline suite with branch coverage plus four
 rendered Playwright scenarios. A fresh wheel install completed doctor and the bundled demo; the
 documented example extension generated a handoff; and a non-root Linux/arm64 container passed doctor
 and UI health checks under a read-only filesystem with dropped capabilities. Public GitHub CI repeats
 quality, security, package, browser, and Linux/macOS/Windows compatibility checks on every change to
 `main` and every pull request. The tag workflow repeats those gates before building and checksumming
 release assets; a release is proven separately only after that tag workflow and asset readback pass.
+Codex hook runtime remains a separate environment-specific layer: this validation machine could
+not run a nested Codex binary, so source-reviewed schema tests and local configuration tests do not
+claim a real compaction delivery.
 
 ## Open Source Adoption release checks
 
-The 0.3.0 browser and UI acceptance matrix covers the user-facing workflow separately from the
+The 0.4.0 browser and UI acceptance matrix covers the user-facing workflow separately from the
 underlying parser, storage, and provider contracts:
 
 - The first screen offers a private workspace path and a credential-free sample path.

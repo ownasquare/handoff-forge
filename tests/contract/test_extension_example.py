@@ -5,6 +5,8 @@ import shutil
 import subprocess
 import sys
 import textwrap
+import zipfile
+from email.parser import BytesParser
 from pathlib import Path
 
 ROOT = Path(__file__).parents[2]
@@ -45,8 +47,18 @@ def test_local_notes_wheel_is_discovered_without_import_then_loads_when_allowlis
             cwd=tmp_path,
         )
 
-    core_wheel = next(wheels.glob("handoff_forge-0.3.0-*.whl"))
+    core_wheel = next(wheels.glob("handoff_forge-0.4.0-*.whl"))
     extension_wheel = next(wheels.glob("handoff_forge_local_notes-0.1.0-*.whl"))
+    with zipfile.ZipFile(extension_wheel) as archive:
+        metadata_name = next(
+            name for name in archive.namelist() if name.endswith(".dist-info/METADATA")
+        )
+        metadata = BytesParser().parsebytes(archive.read(metadata_name))
+    requirements = metadata.get_all("Requires-Dist", [])
+    assert any(
+        requirement.startswith("handoff-forge") and ">=0.4" in requirement and "<0.5" in requirement
+        for requirement in requirements
+    )
     _run(
         [
             sys.executable,

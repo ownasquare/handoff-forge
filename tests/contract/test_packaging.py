@@ -16,7 +16,7 @@ def test_release_version_has_one_package_source() -> None:
     assert config["project"].get("dynamic") == ["version"]
     assert "version" not in config["project"]
     assert config["tool"]["hatch"]["version"]["path"] == "src/handoff_forge/__init__.py"
-    assert __version__ == "0.3.0"
+    assert __version__ == "0.4.0"
     assert "Operating System :: OS Independent" not in config["project"]["classifiers"]
 
 
