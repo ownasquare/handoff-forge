@@ -36,7 +36,7 @@ dependencies = [
   "pypdfium2>=5.9,<6",
   "pytesseract==0.3.13",
   "pyyaml>=6.0.2,<7",
-  "streamlit==1.59.2",
+  "streamlit==1.60.0",
   "typer>=0.21,<1",
 ]
 
