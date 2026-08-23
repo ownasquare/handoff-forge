@@ -24,7 +24,7 @@ classifiers = [
 dependencies = [
   "chromadb==0.6.3",
   "filelock>=3.19,<4",
-  "llama-index-core==0.14.23",
+  "llama-index-core==0.14.24",
   "markdown-it-py>=4,<5",
   "mdit-py-plugins>=0.5,<1",
   "overrides>=7.7,<8",
